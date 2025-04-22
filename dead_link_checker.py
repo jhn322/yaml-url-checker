@@ -77,28 +77,85 @@ def check_url(url: str) -> Tuple[bool, str]:
         # Catch unexpected errors
         return False, f"Failed (Unexpected Error: {e})"
 
-def send_to_discord(webhook_url: str, message: str):
-    """Sends a message to the specified Discord webhook."""
+def send_to_discord(webhook_url: str, lines: List[str]):
+    """Sends a list of message lines to the specified Discord webhook,
+       splitting into multiple messages if necessary to respect character limits.
+    """
     if not webhook_url:
         print("  Discord webhook URL not configured. Skipping notification.")
         return
 
-    # Discord message limits (adjust if needed)
-    max_length = 1950
-    if len(message) > max_length:
-        message = message[:max_length] + "... (message truncated)"
+    if not lines:
+        print("  No lines provided for Discord notification.")
+        return
 
-    payload = {"content": message}
+    max_length = 1950 # Keep slightly under 2000 for safety
+    current_message_lines = []
+    current_length = 0
+    message_count = 0
+
     headers = {"Content-Type": "application/json"}
 
-    try:
-        response = requests.post(webhook_url, json=payload, headers=headers, timeout=REQUEST_TIMEOUT_SECONDS)
-        response.raise_for_status() # Raise an exception for bad status codes (4xx or 5xx)
-        print("  Successfully sent notification to Discord.")
-    except requests.exceptions.RequestException as e:
-        print(f"  Error sending Discord notification: {e}")
-    except Exception as e:
-        print(f"  An unexpected error occurred during Discord notification: {e}")
+    # Add the first line (usually the title) to start
+    first_line = lines[0]
+    current_message_lines.append(first_line)
+    current_length += len(first_line)
+
+    # Iterate through the rest of the lines
+    for line in lines[1:]:
+        line_len = len(line)
+        # Check if adding the current line (plus a newline character) exceeds the limit
+        if current_length + line_len + 1 > max_length:
+            # Send the current chunk
+            message_chunk = "\n".join(current_message_lines)
+            payload = {"content": message_chunk}
+            try:
+                print(f"  Sending Discord message chunk {message_count + 1}...")
+                response = requests.post(webhook_url, json=payload, headers=headers, timeout=REQUEST_TIMEOUT_SECONDS)
+                response.raise_for_status()
+                message_count += 1
+                time.sleep(0.5) # Small delay between chunks
+            except requests.exceptions.RequestException as e:
+                print(f"  Error sending Discord notification chunk: {e}")
+                # Optionally break or return here if one chunk fails
+                return
+            except Exception as e:
+                print(f"  An unexpected error occurred during Discord notification chunk: {e}")
+                return
+
+            # Start a new chunk with the current line
+            # If even a single line is too long, it can't be sent (edge case)
+            if line_len > max_length:
+                 print(f"  Warning: Skipping single line that exceeds Discord limit: {line[:50]}...")
+                 current_message_lines = [f"(Previous message chunk {message_count} sent) Continued..."]
+                 current_length = len(current_message_lines[0])
+            else:
+                 # Add continuation marker if splitting
+                 continuation_line = f"(Message chunk {message_count}) Continued..."
+                 current_message_lines = [continuation_line, line]
+                 current_length = len(continuation_line) + 1 + line_len
+
+        else:
+            # Add the line to the current chunk
+            current_message_lines.append(line)
+            current_length += line_len + 1 # Add 1 for the newline character
+
+    # Send the final remaining chunk if any lines are left
+    if current_message_lines:
+        message_chunk = "\n".join(current_message_lines)
+        payload = {"content": message_chunk}
+        try:
+            print(f"  Sending final Discord message chunk {message_count + 1}...")
+            response = requests.post(webhook_url, json=payload, headers=headers, timeout=REQUEST_TIMEOUT_SECONDS)
+            response.raise_for_status()
+            message_count += 1
+        except requests.exceptions.RequestException as e:
+            print(f"  Error sending final Discord notification chunk: {e}")
+        except Exception as e:
+            print(f"  An unexpected error occurred during final Discord notification chunk: {e}")
+
+    if message_count > 0:
+         print(f"  Successfully sent notification ({message_count} message(s)) to Discord.")
 
 def main():
     """Main function to find YAML files, parse them, check URLs, and notify."""
@@ -170,8 +227,8 @@ def main():
 
         # Send to Discord
         if DISCORD_WEBHOOK_URL:
-            discord_message = "\n".join(discord_message_lines)
-            send_to_discord(DISCORD_WEBHOOK_URL, discord_message)
+            # Pass the list of lines directly for splitting
+            send_to_discord(DISCORD_WEBHOOK_URL, discord_message_lines)
 
         # Log to file
         if LOG_FILE:
