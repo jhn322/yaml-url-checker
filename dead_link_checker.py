@@ -28,7 +28,21 @@ URL_PATTERNS = [
     re.compile(TRAKT_LIST_PATTERN),
     re.compile(LETTERBOXD_LIST_PATTERN),
 ]
+
 # --- End Configuration ---
+
+# --- Exclusions ---
+# Add specific URLs here that should NOT be checked (e.g., your own private lists)
+# NOTE: Query parameters are ignored during exclusion matching.
+EXCLUDED_URLS = {
+    "https://trakt.tv/users/jhn322/lists/9-10-tv-show-anime",
+    "https://trakt.tv/users/jhn322/lists/7-10-tv-show-anime",
+    "https://trakt.tv/users/jhn322/lists/1-5-10-tv-show-anime",
+    "https://trakt.tv/users/jhn322/lists/6-10-tv-show-anime",
+    "https://trakt.tv/users/jhn322/lists/10-10-tv-show-anime",
+    "https://trakt.tv/users/jhn322/lists/8-10-tv-show-anime",
+}
+# --- End Exclusions ---
 
 def find_urls_in_value(data: Any) -> Iterator[str]:
     """Recursively searches for strings matching URL patterns in YAML data."""
@@ -191,6 +205,14 @@ def main():
                     checked_urls.add(url) # Mark as planned to check
 
             for url in urls_to_check:
+                # Strip query parameters for exclusion check
+                base_url = url.split('?')[0]
+
+                # Check if the base URL is in the exclusion list
+                if base_url in EXCLUDED_URLS:
+                    print(f"  Skipping excluded URL: {url}")
+                    continue # Move to the next URL
+
                 print(f"  Checking: {url}...")
                 is_ok, status = check_url(url)
                 if not is_ok:
