@@ -24,9 +24,11 @@ DISCORD_WEBHOOK_URL = os.getenv("DISCORD_WEBHOOK_URL")
 # Allows digits or slugs for Trakt lists, ignores query params, allows optional trailing slash for Letterboxd
 TRAKT_LIST_PATTERN = r"https?://trakt\.tv/users/[^/]+/lists/(\d+|[a-zA-Z0-9-]+)(\?.*)?$"
 LETTERBOXD_LIST_PATTERN = r"https?://letterboxd\.com/[^/]+/list/[^/]+/?$"
+IMDB_PATTERN = r"https?://(?:www\.)?imdb\.com/(?:list/ls\d+/?|search/[^/]+/?\?[^/]+)$"
 URL_PATTERNS = [
     re.compile(TRAKT_LIST_PATTERN),
     re.compile(LETTERBOXD_LIST_PATTERN),
+    re.compile(IMDB_PATTERN),
 ]
 
 # --- End Configuration ---

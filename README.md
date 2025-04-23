@@ -119,13 +119,13 @@ To run the script automatically (e.g., daily), you can set up a cron job.
 2.  **Add the following line** at the end of the file, adjusting paths and schedule as needed:
 
     ```crontab
-    # Run dead link checker daily at 5:00 AM
-    0 5 * * *   root    cd /home/username/dead-link-checker && /home/username/dead-link-checker/.venv/bin/python3 /home/username/dead-link-checker/dead_link_checker.py >> /home/username/dead-link-checker/cron.log 2>&1
+    # Run dead link checker daily at 3:00 AM
+    0 3 * * *   root    cd /home/username/dead-link-checker && /home/username/dead-link-checker/.venv/bin/python3 /home/username/dead-link-checker/dead_link_checker.py >> /home/username/dead-link-checker/cron.log 2>&1
     ```
 
     **Explanation of the cron line:**
 
-    - `0 5 * * *`: Run at 5:00 AM every day. (Minute Hour DayOfMonth Month DayOfWeek)
+    - `0 3 * * *`: Run at 3:00 AM every day. (Minute Hour DayOfMonth Month DayOfWeek)
     - `root`: The user to run the command as.
     - `cd /home/username/dead-link-checker`: **Crucial:** Change to the script's directory so it can find the `.env` file and relative paths. **Adjust this path** to match your installation location.
     - `&&`: Run the next command only if `cd` is successful.
