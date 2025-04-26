@@ -1,4 +1,4 @@
-# Dead Link Checker
+# YAML URL Checker
 
 This script scans YAML configuration files in a specified directory (intended for Kometa config files but can be used for anything else) for Trakt and Letterboxd list URLs and checks if they are accessible (return a 2xx status code). It logs results, prints a summary to the console, and optionally sends a summary of dead links to a Discord webhook.
 
