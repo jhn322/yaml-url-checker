@@ -26,7 +26,7 @@ This script scans YAML configuration files in a specified directory (intended fo
 1.  **Clone the repository:**
 
     ```bash
-    git clone https://github.com/username322/yaml-url-checker.git # Replace with your repo URL if different
+    git clone https://github.com/username322/yaml-url-checker.git
     cd yaml-url-checker
     ```
 
