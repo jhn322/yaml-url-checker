@@ -120,7 +120,7 @@ To run the script automatically (e.g., daily), you can set up a cron job.
 
     ```crontab
     # Run YAML URL Checker daily at 3:00 AM
-    0 3 * * *   root    cd /home/username/yaml-url-checker && /home/username/yaml-url-checker/.venv/bin/python3 /home/username/yaml-url-checker/yaml_url_checker.py >> /home/username/yaml-url-checker/cron.log 2>&1
+    0 3 * * * root cd /home/username/yaml-url-checker && /home/username/yaml-url-checker/.venv/bin/python3 /home/username/yaml-url-checker/yaml_url_checker.py > "/home/username/yaml-url-checker/cron_$(date +\%Y\%m\%d_\%H\%M\%S).log" 2>&1
     ```
 
     **Explanation of the cron line:**
