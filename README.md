@@ -1,6 +1,6 @@
 # YAML URL Checker
 
-This script scans YAML configuration files in a specified directory (intended for Kometa config files but can be used for anything else) for Trakt and Letterboxd list URLs and checks if they are accessible (return a 2xx status code). It logs results, prints a summary to the console, and optionally sends a summary of dead links to a Discord webhook.
+This script scans YAML configuration files in a specified directory (intended for Kometa config files but can be used for anything else) for Trakt and Letterboxd list URLs and checks if they are accessible (return a 2xx status code). It logs results with proper rotation, prints a summary to the console, and optionally sends a summary of dead links to a Discord webhook.
 
 ## Features
 
@@ -9,10 +9,16 @@ This script scans YAML configuration files in a specified directory (intended fo
 - Checks URL accessibility using HEAD requests (following redirects).
 - Configurable delay between requests to avoid rate-limiting.
 - Configurable request timeout.
-- Logs results to the console and optionally to a file.
+- Advanced logging system with:
+  - Automatic log rotation (5MB per file, up to 3 files)
+  - Timestamp and log level information
+  - Both console and file output
+  - Structured log format
 - Sends a notification with a summary of **dead links only** to a Discord webhook if configured.
 - Uses a virtual environment to manage dependencies.
 - Configuration via environment variables (`.env` file).
+- Proper error handling and reporting.
+- URL exclusion list support.
 
 ## Prerequisites
 
@@ -26,7 +32,7 @@ This script scans YAML configuration files in a specified directory (intended fo
 1.  **Clone the repository:**
 
     ```bash
-    git clone https://github.com/username322/yaml-url-checker.git
+    git clone https://github.com/jhn322/yaml-url-checker.git # Replace with your repo URL if different
     cd yaml-url-checker
     ```
 
@@ -76,9 +82,6 @@ Configuration is managed via environment variables, typically loaded from a `.en
     # Directory containing Kometa .yml/.yaml config files to scan
     # CONFIG_DIR=/path/to/your/kometa/config
 
-    # Path to the log file for appending results (leave blank or comment out to disable file logging)
-    # LOG_FILE=/path/to/your/yaml_url_checker.log
-
     # Delay in seconds between checking each URL
     # REQUEST_DELAY_SECONDS=1
 
@@ -92,7 +95,7 @@ Configuration is managed via environment variables, typically loaded from a `.en
     - **`DISCORD_WEBHOOK_URL` is required** if you want Discord notifications. Find this in your Discord channel's Integrations settings.
     - Other variables override the defaults set in `yaml_url_checker.py` if provided.
 
-    **Important Note on Default Paths:** The script `yaml_url_checker.py` contains default paths for `CONFIG_DIR` and `LOG_FILE` (e.g., `/home/username/...`). If you are **not** overriding these variables in your `.env` file, you **must** edit lines 15 and 16 in `yaml_url_checker.py` directly to replace `"username"` with your actual username and adjust the paths to match your system's configuration. Using the `.env` file to set these paths is the recommended approach.
+    **Important Note on Default Paths:** The script `yaml_url_checker.py` contains default paths for `CONFIG_DIR` (e.g., `/home/username/...`). If you are **not** overriding these variables in your `.env` file, you **must** edit the path in `yaml_url_checker.py` directly to match your system's configuration. Using the `.env` file to set these paths is the recommended approach.
 
 ## Usage
 
@@ -104,7 +107,21 @@ Ensure you are in the project directory (`yaml-url-checker`) and the virtual env
 python yaml_url_checker.py
 ```
 
-The script will print progress to the console, log to the configured file (if any), and send a Discord notification if dead links are found and a webhook URL is configured.
+The script will:
+
+- Print progress to the console
+- Log to rotating log files in the `logs` directory
+- Send a Discord notification if dead links are found and a webhook URL is configured
+
+### Log Files
+
+Logs are stored in the `logs` directory with the following structure:
+
+- `yaml_url_checker.log` (current log file)
+- `yaml_url_checker.log.1` (first backup)
+- `yaml_url_checker.log.2` (second backup)
+
+Log files are automatically rotated when they reach 5MB, with a maximum of 3 files maintained.
 
 ### Scheduled Execution (Cron Job - Linux/macOS)
 
@@ -119,8 +136,8 @@ To run the script automatically (e.g., daily), you can set up a cron job.
 2.  **Add the following line** at the end of the file, adjusting paths and schedule as needed:
 
     ```crontab
-    # Run YAML URL Checker daily at 3:00 AM
-    0 3 * * * root cd /home/username/yaml-url-checker && /home/username/yaml-url-checker/.venv/bin/python3 /home/username/yaml-url-checker/yaml_url_checker.py > "/home/username/yaml-url-checker/cron_$(date +\%Y\%m\%d_\%H\%M\%S).log" 2>&1
+    # Run dead link checker daily at 3:00 AM
+    0 3 * * * root cd /home/username/yaml-url-checker && /home/username/yaml-url-checker/.venv/bin/python3 /home/username/yaml-url-checker/yaml_url_checker.py
     ```
 
     **Explanation of the cron line:**
@@ -131,15 +148,18 @@ To run the script automatically (e.g., daily), you can set up a cron job.
     - `&&`: Run the next command only if `cd` is successful.
     - `/home/username/yaml-url-checker/.venv/bin/python3`: **Crucial:** Execute using the Python interpreter **inside the virtual environment**. Adjust the path if your project or venv location differs.
     - `/home/username/yaml-url-checker/yaml_url_checker.py`: The full path to the script. Adjust if needed.
-    - `>> /home/username/yaml-url-checker/cron.log 2>&1`: Append standard output and standard error to a log file (`cron.log`) within the project directory. This helps debug cron issues.
 
 3.  **Save and close** the editor (e.g., `Ctrl+X`, then `Y`, then `Enter` in nano). Cron will automatically pick up the changes.
 
 ## Troubleshooting
 
-- **`ModuleNotFoundError: No module named 'dotenv'` (or similar):** Make sure you have activated the virtual environment (`source .venv/bin/activate`) before running `pip install` or `python yaml_url_checker.py`. If running via cron, ensure the crontab entry uses the python executable from the `.venv` directory (e.g., `/path/to/project/.venv/bin/python3`).
+- **`ModuleNotFoundError: No module named 'dotenv'` (or similar):** Make sure you have activated the virtual environment (`source .venv/bin/activate`) before running `pip install` or `python yaml_url_checker.py`. If running via cron, ensure the crontab entry uses the python executable from the `.venv` directory.
 - **`/usr/bin/env: 'python3': No such file or directory`:** This indicates Windows line endings (`
 `) in the script file when running on Linux/macOS. Use `dos2unix yaml_url_checker.py` to convert line endings to Unix format (`
 `).
-- **Permission Errors (Cron):** Ensure the user running the cron job (`root` in the example) has read permissions for the script, the `.env` file, the config directory, and write permissions for the log file directory (if logging is enabled).
-- **Discord Notification Errors:** Double-check the `DISCORD_WEBHOOK_URL` in your `.env` file. Check the script output or `cron.log` for specific error messages from the `requests` library.
+- **Permission Errors (Cron):** Ensure the user running the cron job (`root` in the example) has read permissions for the script, the `.env` file, the config directory, and write permissions for the `logs` directory.
+- **Discord Notification Errors:** Double-check the `DISCORD_WEBHOOK_URL` in your `.env` file. Check the logs for specific error messages from the `requests` library.
+- **Log File Issues:** If you encounter problems with log files:
+  - Ensure the `logs` directory exists and is writable
+  - Check that the script has permissions to create and write to log files
+  - Verify that there's enough disk space for log rotation

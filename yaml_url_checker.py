@@ -6,17 +6,49 @@ import requests
 import time
 import glob
 import re
+import logging
+from logging.handlers import RotatingFileHandler
 from typing import Any, List, Tuple, Iterator
 from dotenv import load_dotenv
 
 # --- Configuration ---
 load_dotenv()
 
-CONFIG_DIR = os.getenv("CONFIG_DIR", "/home/username/Docker/containers/Kometa/config/") # Adjust this path to match your installation location
-LOG_FILE = os.getenv("LOG_FILE", "/home/username/dead-link-checker/dead_link_checker.log") # Adjust this path to match your installation location
+CONFIG_DIR = os.getenv("CONFIG_DIR", "/home/username/Kometa/config/") # Adjust this path to match your installation location
+LOG_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "logs")
+LOG_FILE = os.path.join(LOG_DIR, "yaml_url_checker.log")
+MAX_LOG_SIZE = 5 * 1024 * 1024  # 5MB
+MAX_LOG_FILES = 3
+
+# Configure logging
+os.makedirs(LOG_DIR, exist_ok=True)
+logger = logging.getLogger("yaml_url_checker")
+logger.setLevel(logging.INFO)
+
+# Create rotating file handler
+file_handler = RotatingFileHandler(
+    LOG_FILE,
+    maxBytes=MAX_LOG_SIZE,
+    backupCount=MAX_LOG_FILES - 1,
+    encoding='utf-8'
+)
+
+# Create console handler
+console_handler = logging.StreamHandler()
+console_handler.setLevel(logging.INFO)
+
+# Create formatter
+formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+file_handler.setFormatter(formatter)
+console_handler.setFormatter(formatter)
+
+# Add handlers to logger
+logger.addHandler(file_handler)
+logger.addHandler(console_handler)
+
 REQUEST_DELAY_SECONDS = int(os.getenv("REQUEST_DELAY_SECONDS", 1))
 REQUEST_TIMEOUT_SECONDS = int(os.getenv("REQUEST_TIMEOUT_SECONDS", 10))
-USER_AGENT = os.getenv("USER_AGENT", "KometaLinkChecker/1.0 (+https://github.com/jhn322/dead-link-checker)")
+USER_AGENT = os.getenv("USER_AGENT", "KometaLinkChecker/1.0 (+https://github.com/jhn322/yaml-url-checker)")
 DISCORD_WEBHOOK_URL = os.getenv("DISCORD_WEBHOOK_URL")
 
 # Regex to identify potential Trakt and Letterboxd list URLs
@@ -98,11 +130,11 @@ def send_to_discord(webhook_url: str, lines: List[str]):
        splitting into multiple messages if necessary to respect character limits.
     """
     if not webhook_url:
-        print("  Discord webhook URL not configured. Skipping notification.")
+        logger.warning("Discord webhook URL not configured. Skipping notification.")
         return
 
     if not lines:
-        print("  No lines provided for Discord notification.")
+        logger.warning("No lines provided for Discord notification.")
         return
 
     max_length = 1950 # Keep slightly under 2000 for safety
@@ -126,23 +158,22 @@ def send_to_discord(webhook_url: str, lines: List[str]):
             message_chunk = "\n".join(current_message_lines)
             payload = {"content": message_chunk}
             try:
-                print(f"  Sending Discord message chunk {message_count + 1}...")
+                logger.info(f"Sending Discord message chunk {message_count + 1}...")
                 response = requests.post(webhook_url, json=payload, headers=headers, timeout=REQUEST_TIMEOUT_SECONDS)
                 response.raise_for_status()
                 message_count += 1
                 time.sleep(0.5) # Small delay between chunks
             except requests.exceptions.RequestException as e:
-                print(f"  Error sending Discord notification chunk: {e}")
-                # Optionally break or return here if one chunk fails
+                logger.error(f"Error sending Discord notification chunk: {e}")
                 return
             except Exception as e:
-                print(f"  An unexpected error occurred during Discord notification chunk: {e}")
+                logger.error(f"An unexpected error occurred during Discord notification chunk: {e}")
                 return
 
             # Start a new chunk with the current line
             # If even a single line is too long, it can't be sent (edge case)
             if line_len > max_length:
-                 print(f"  Warning: Skipping single line that exceeds Discord limit: {line[:50]}...")
+                 logger.warning(f"Skipping single line that exceeds Discord limit: {line[:50]}...")
                  current_message_lines = [f"(Previous message chunk {message_count} sent) Continued..."]
                  current_length = len(current_message_lines[0])
             else:
@@ -161,30 +192,28 @@ def send_to_discord(webhook_url: str, lines: List[str]):
         message_chunk = "\n".join(current_message_lines)
         payload = {"content": message_chunk}
         try:
-            print(f"  Sending final Discord message chunk {message_count + 1}...")
+            logger.info(f"Sending final Discord message chunk {message_count + 1}...")
             response = requests.post(webhook_url, json=payload, headers=headers, timeout=REQUEST_TIMEOUT_SECONDS)
             response.raise_for_status()
             message_count += 1
         except requests.exceptions.RequestException as e:
-            print(f"  Error sending final Discord notification chunk: {e}")
+            logger.error(f"Error sending final Discord notification chunk: {e}")
         except Exception as e:
-            print(f"  An unexpected error occurred during final Discord notification chunk: {e}")
+            logger.error(f"An unexpected error occurred during final Discord notification chunk: {e}")
 
     if message_count > 0:
-         print(f"  Successfully sent notification ({message_count} message(s)) to Discord.")
+         logger.info(f"Successfully sent notification ({message_count} message(s)) to Discord.")
 
 def main():
     """Main function to find YAML files, parse them, check URLs, and notify."""
-    print(f"Starting dead link check in: {CONFIG_DIR}")
-    if LOG_FILE:
-        print(f"Logging results to: {LOG_FILE}")
+    logger.info(f"Starting dead link check in: {CONFIG_DIR}")
 
     # Find both .yml and .yaml files
     yaml_files = glob.glob(os.path.join(CONFIG_DIR, "*.yml"))
     yaml_files.extend(glob.glob(os.path.join(CONFIG_DIR, "*.yaml")))
 
     if not yaml_files:
-        print(f"Error: No YAML files found in {CONFIG_DIR}")
+        logger.error(f"No YAML files found in {CONFIG_DIR}")
         return
 
     dead_links_found: List[Tuple[str, str, str]] = []
@@ -192,7 +221,7 @@ def main():
 
     for filepath in yaml_files:
         filename = os.path.basename(filepath)
-        print(f"Processing: {filename}...")
+        logger.info(f"Processing: {filename}...")
         try:
             with open(filepath, 'r', encoding='utf-8') as f:
                 # Use safe_load to avoid potential security risks with arbitrary code execution
@@ -212,70 +241,45 @@ def main():
 
                 # Check if the base URL is in the exclusion list
                 if base_url in EXCLUDED_URLS:
-                    print(f"  Skipping excluded URL: {url}")
+                    logger.info(f"Skipping excluded URL: {url}")
                     continue # Move to the next URL
 
-                print(f"  Checking: {url}...")
+                logger.info(f"Checking: {url}...")
                 is_ok, status = check_url(url)
                 if not is_ok:
-                    print(f"  DEAD LINK DETECTED: {url} - Status: {status}")
+                    logger.warning(f"DEAD LINK DETECTED: {url} - Status: {status}")
                     dead_links_found.append((filename, url, status))
                 else:
-                    # Optional: Log successful checks for debugging
-                    # print(f"  OK: {url} - Status: {status}")
-                    pass
+                    logger.debug(f"OK: {url} - Status: {status}")
 
                 # Delay between requests
                 time.sleep(REQUEST_DELAY_SECONDS)
 
         except yaml.YAMLError as e:
-            print(f"  Error parsing YAML file {filename}: {e}")
+            logger.error(f"Error parsing YAML file {filename}: {e}")
         except FileNotFoundError:
-            print(f"  Error: File not found {filename} (should not happen with glob)")
+            logger.error(f"File not found {filename} (should not happen with glob)")
         except Exception as e:
-            print(f"  An unexpected error occurred processing {filename}: {e}")
+            logger.error(f"An unexpected error occurred processing {filename}: {e}")
 
-    print("-" * 30)
-    print("Dead Link Check Summary:")
+    logger.info("-" * 30)
+    logger.info("Dead Link Check Summary:")
     if dead_links_found:
         summary_title = f"Found {len(dead_links_found)} dead link(s) during scan:"
-        print(summary_title)
-        output_lines = []
+        logger.info(summary_title)
         discord_message_lines = [summary_title]
         for filename, url, status in dead_links_found:
-            line = f"  - File: {filename}, URL: {url}, Status: {status}"
-            print(line)
+            line = f"File: {filename}, URL: {url}, Status: {status}"
+            logger.info(line)
             discord_message_lines.append(f"- File: `{filename}`, URL: <{url}>, Status: {status}")
-            if LOG_FILE:
-                output_lines.append(line)
 
         # Send to Discord
         if DISCORD_WEBHOOK_URL:
-            # Pass the list of lines directly for splitting
             send_to_discord(DISCORD_WEBHOOK_URL, discord_message_lines)
-
-        # Log to file
-        if LOG_FILE:
-            try:
-                with open(LOG_FILE, 'a', encoding='utf-8') as log_f:
-                    log_f.write(f"--- Check run on {time.ctime()} ---\\n")
-                    log_f.write(f"Found {len(dead_links_found)} dead link(s):\\n")
-                    for line in output_lines:
-                        log_f.write(line + "\\n")
-                    log_f.write("-" * 20 + "\\n")
-            except Exception as e:
-                print(f"Error writing to log file {LOG_FILE}: {e}")
-
     else:
-        print("No dead links found.")
-        if LOG_FILE:
-             try:
-                with open(LOG_FILE, 'a', encoding='utf-8') as log_f:
-                    log_f.write(f"--- Check run on {time.ctime()} - No dead links found ---\\n")
-             except Exception as e:
-                print(f"Error writing to log file {LOG_FILE}: {e}")
+        logger.info("No dead links found.")
 
-    print("Check finished.")
+    logger.info("Check finished.")
 
 
 if __name__ == "__main__":
