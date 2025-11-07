@@ -1,11 +1,11 @@
 # YAML URL Checker
 
-This script scans YAML configuration files in a specified directory (intended for Kometa config files but can be used for anything else) for Trakt and Letterboxd list URLs and checks if they are accessible (return a 2xx status code). It logs results with proper rotation, prints a summary to the console, and optionally sends a summary of dead links to a Discord webhook.
+This script scans YAML configuration files in a specified directory (intended for Kometa config files but can be used for anything else) for Trakt, IMDb and Letterboxd list URLs and checks if they are accessible (returns a 2xx status code). It logs results with proper rotation, prints a summary to the console, and optionally sends a summary of dead links to a Discord webhook.
 
 ## Features
 
 - Scans `.yml` and `.yaml` files in a configured directory.
-- Recursively finds URLs matching Trakt and Letterboxd patterns within YAML values.
+- Recursively finds URLs matching Trakt, IMDb and Letterboxd patterns within YAML values.
 - Checks URL accessibility using HEAD requests (following redirects).
 - Configurable delay between requests to avoid rate-limiting.
 - Configurable request timeout.
@@ -32,7 +32,7 @@ This script scans YAML configuration files in a specified directory (intended fo
 1.  **Clone the repository:**
 
     ```bash
-    git clone https://github.com/jhn322/yaml-url-checker.git # Replace with your repo URL if different
+    git clone https://github.com/jhn322/yaml-url-checker.git
     cd yaml-url-checker
     ```
 
