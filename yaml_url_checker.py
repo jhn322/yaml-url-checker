@@ -14,7 +14,7 @@ from dotenv import load_dotenv
 # --- Configuration ---
 load_dotenv()
 
-CONFIG_DIR = os.getenv("CONFIG_DIR", "/home/username/Kometa/config/") # Adjust this path to match your installation location
+CONFIG_DIR = os.getenv("CONFIG_DIR", "/home/username/Kometa/config/") # This is a fallback DIR
 LOG_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "logs")
 LOG_FILE = os.path.join(LOG_DIR, "yaml_url_checker.log")
 MAX_LOG_SIZE = 5 * 1024 * 1024  # 5MB
@@ -51,8 +51,7 @@ REQUEST_TIMEOUT_SECONDS = int(os.getenv("REQUEST_TIMEOUT_SECONDS", 10))
 USER_AGENT = os.getenv("USER_AGENT", "KometaLinkChecker/1.0 (+https://github.com/jhn322/yaml-url-checker)")
 DISCORD_WEBHOOK_URL = os.getenv("DISCORD_WEBHOOK_URL")
 
-# Regex to identify potential Trakt and Letterboxd list URLs
-# Adjust these patterns if your URLs have different structures
+# Regex to identify potential Trakt, Letterboxd and IMDb list URLs
 # Allows digits or slugs for Trakt lists, ignores query params, allows optional trailing slash for Letterboxd
 TRAKT_LIST_PATTERN = r"https?://trakt\.tv/users/[^/]+/lists/(\d+|[a-zA-Z0-9-]+)(\?.*)?$"
 LETTERBOXD_LIST_PATTERN = r"https?://letterboxd\.com/[^/]+/list/[^/]+/?$"
@@ -84,24 +83,17 @@ def find_urls_in_value(data: Any) -> Iterator[str]:
         for pattern in URL_PATTERNS:
             if pattern.fullmatch(data):
                 yield data
-                break # No need to check other patterns if one matches
+                break 
     elif isinstance(data, list):
         for item in data:
             yield from find_urls_in_value(item)
     elif isinstance(data, dict):
         for key, value in data.items():
-            # Optionally check keys too, though less common for URLs
             # yield from find_urls_in_value(key)
             yield from find_urls_in_value(value)
 
 def check_url(url: str) -> Tuple[bool, str]:
-    """Checks if a URL is accessible via a HEAD request.
 
-    Returns:
-        Tuple[bool, str]: (is_ok, status_message)
-                          is_ok is True if status is 2xx, False otherwise.
-                          status_message contains details (status code or error).
-    """
     try:
         headers = {'User-Agent': USER_AGENT}
         response = requests.head(
@@ -122,7 +114,6 @@ def check_url(url: str) -> Tuple[bool, str]:
         error_type = type(e).__name__
         return False, f"Failed ({error_type})"
     except Exception as e:
-        # Catch unexpected errors
         return False, f"Failed (Unexpected Error: {e})"
 
 def send_to_discord(webhook_url: str, lines: List[str]):
@@ -137,24 +128,21 @@ def send_to_discord(webhook_url: str, lines: List[str]):
         logger.warning("No lines provided for Discord notification.")
         return
 
-    max_length = 1950 # Keep slightly under 2000 for safety
+    max_length = 1950 
     current_message_lines = []
     current_length = 0
     message_count = 0
 
     headers = {"Content-Type": "application/json"}
 
-    # Add the first line (usually the title) to start
     first_line = lines[0]
     current_message_lines.append(first_line)
     current_length += len(first_line)
 
-    # Iterate through the rest of the lines
     for line in lines[1:]:
         line_len = len(line)
         # Check if adding the current line (plus a newline character) exceeds the limit
         if current_length + line_len + 1 > max_length:
-            # Send the current chunk
             message_chunk = "\n".join(current_message_lines)
             payload = {"content": message_chunk}
             try:
@@ -162,7 +150,7 @@ def send_to_discord(webhook_url: str, lines: List[str]):
                 response = requests.post(webhook_url, json=payload, headers=headers, timeout=REQUEST_TIMEOUT_SECONDS)
                 response.raise_for_status()
                 message_count += 1
-                time.sleep(0.5) # Small delay between chunks
+                time.sleep(0.5) 
             except requests.exceptions.RequestException as e:
                 logger.error(f"Error sending Discord notification chunk: {e}")
                 return
@@ -171,21 +159,18 @@ def send_to_discord(webhook_url: str, lines: List[str]):
                 return
 
             # Start a new chunk with the current line
-            # If even a single line is too long, it can't be sent (edge case)
             if line_len > max_length:
                  logger.warning(f"Skipping single line that exceeds Discord limit: {line[:50]}...")
                  current_message_lines = [f"(Previous message chunk {message_count} sent) Continued..."]
                  current_length = len(current_message_lines[0])
             else:
-                 # Add continuation marker if splitting
                  continuation_line = f"(Message chunk {message_count}) Continued..."
                  current_message_lines = [continuation_line, line]
                  current_length = len(continuation_line) + 1 + line_len
 
         else:
-            # Add the line to the current chunk
             current_message_lines.append(line)
-            current_length += line_len + 1 # Add 1 for the newline character
+            current_length += line_len + 1
 
     # Send the final remaining chunk if any lines are left
     if current_message_lines:
@@ -208,7 +193,6 @@ def main():
     """Main function to find YAML files, parse them, check URLs, and notify."""
     logger.info(f"Starting dead link check in: {CONFIG_DIR}")
 
-    # Find both .yml and .yaml files
     yaml_files = glob.glob(os.path.join(CONFIG_DIR, "*.yml"))
     yaml_files.extend(glob.glob(os.path.join(CONFIG_DIR, "*.yaml")))
 
@@ -217,7 +201,7 @@ def main():
         return
 
     dead_links_found: List[Tuple[str, str, str]] = []
-    checked_urls = set() # Keep track of checked URLs to avoid duplicates per run
+    checked_urls = set() 
 
     for filepath in yaml_files:
         filename = os.path.basename(filepath)
@@ -226,14 +210,14 @@ def main():
             with open(filepath, 'r', encoding='utf-8') as f:
                 # Use safe_load to avoid potential security risks with arbitrary code execution
                 data = yaml.safe_load(f)
-                if data is None: # Handle empty files
+                if data is None:
                     continue
 
             urls_to_check = set()
             for url in find_urls_in_value(data):
                 if url not in checked_urls:
                     urls_to_check.add(url)
-                    checked_urls.add(url) # Mark as planned to check
+                    checked_urls.add(url) 
 
             for url in urls_to_check:
                 # Strip query parameters for exclusion check
@@ -242,7 +226,7 @@ def main():
                 # Check if the base URL is in the exclusion list
                 if base_url in EXCLUDED_URLS:
                     logger.info(f"Skipping excluded URL: {url}")
-                    continue # Move to the next URL
+                    continue 
 
                 logger.info(f"Checking: {url}...")
                 is_ok, status = check_url(url)
@@ -252,7 +236,6 @@ def main():
                 else:
                     logger.debug(f"OK: {url} - Status: {status}")
 
-                # Delay between requests
                 time.sleep(REQUEST_DELAY_SECONDS)
 
         except yaml.YAMLError as e:

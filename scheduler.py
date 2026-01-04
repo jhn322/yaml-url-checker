@@ -21,11 +21,8 @@ def job():
     logger.info("Scheduled URL check finished.")
 
 if __name__ == "__main__":
-    # Get schedule from environment variable, default to 3 AM every day
+    # Get schedule from environment variable
     # Format: "minute hour day month day_of_week" (standard cron)
-    # But APScheduler uses 5 fields similar to cron, or specific kwargs.
-    # To keep it simple and compatible with the user's "0 3 * * *" format,
-    # we'll parse a standard cron string or just default to the user's preference.
     
     cron_schedule = os.getenv("CRON_SCHEDULE", "0 3 * * *")
     logger.info(f"Starting scheduler with cron schedule: {cron_schedule}")
@@ -33,7 +30,6 @@ if __name__ == "__main__":
     scheduler = BlockingScheduler()
     
     # Parse the standard cron string "m h dom mon dow"
-    # Note: This is a basic split; if the user uses complex cron strings, they might need adjustment.
     try:
         parts = cron_schedule.split()
         if len(parts) >= 5:
