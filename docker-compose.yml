@@ -1,0 +1,14 @@
+services:
+  yaml-url-checker:
+    image: jhn322/yaml-url-checker:latest
+    container_name: yaml-url-checker
+    restart: unless-stopped
+    volumes:
+      - ${HOST_CONFIG_DIR}:/config
+      - ./logs:/app/logs
+    environment:
+      - CONFIG_DIR=/config
+      - CRON_SCHEDULE=${CRON_SCHEDULE:-0 3 * * *}
+      - DISCORD_WEBHOOK_URL=${DISCORD_WEBHOOK_URL}
+      - USER_AGENT=${USER_AGENT}
+      - TZ=${TZ:-UTC}

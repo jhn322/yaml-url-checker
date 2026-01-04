@@ -3,11 +3,17 @@
 
 # Virtual environment directory
 .venv/
+venv/
+env/
 
 # Python cache files
 __pycache__/
 *.pyc
 *.pyo
 
-# Log files
-*.log 
+# Log files and directories
+*.log
+logs/
+
+# Local configuration directory
+config/
